@@ -1,0 +1,34 @@
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model UserSettings {
+  id                 String   @id @default(uuid())
+  userId             String   @unique // Links to Supabase Auth User ID
+  dailyWage          Float    @default(410.0)
+  foodAllowance      Float    @default(40.0)
+  morningShiftExtra  Float    @default(35.0)
+  nightShiftExtra    Float    @default(55.0)
+  ssoRatePercent     Float    @default(5.0) // Social Security Rate (e.g., 5%)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model DailyWageLog {
+  id             String   @id @default(uuid())
+  userId         String
+  date           DateTime // The specific day logged
+  hasFood        Boolean  @default(true)
+  otHours        Float    @default(0.0) // Number of OT hours (e.g., 1.5, 2)
+  shiftType      String   @default("NONE") // "NONE", "MORNING", "NIGHT"
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([userId, date])
+}
