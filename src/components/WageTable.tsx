@@ -78,10 +78,11 @@ export default function WageTable({
   const toggleWorkDay = async (date: Date, isWorking: boolean) => {
     // Normalizing time for comparison
     const targetTime = new Date(date).setHours(0,0,0,0);
+    const dateStr = format(date, 'yyyy-MM-dd');
     
     if (isWorking) {
       setLogs((prev) => prev.filter((l) => new Date(l.date).setHours(0,0,0,0) !== targetTime));
-      await deleteDailyLog(date);
+      await deleteDailyLog(dateStr);
     } else {
       const newLog: Log = {
         id: 'mock-id',
@@ -92,7 +93,7 @@ export default function WageTable({
         shiftType: 'NONE',
       };
       setLogs((prev) => [...prev, newLog]);
-      await saveDailyLog(date, { hasFood: false, otHours: 0, shiftType: 'NONE' });
+      await saveDailyLog(dateStr, { hasFood: false, otHours: 0, shiftType: 'NONE' });
     }
   };
 
@@ -110,8 +111,9 @@ export default function WageTable({
     const key = date.toISOString();
     if (saveTimeouts.current[key]) clearTimeout(saveTimeouts.current[key]);
     
+    const dateStr = format(date, 'yyyy-MM-dd');
     saveTimeouts.current[key] = setTimeout(() => {
-      saveDailyLog(date, { 
+      saveDailyLog(dateStr, { 
         hasFood: field === 'hasFood' ? (value as boolean) : updatedLog.hasFood, 
         otHours: parseFloat(String(field === 'otHours' ? value : updatedLog.otHours)) || 0, 
         shiftType: field === 'shiftType' ? (value as string) : (updatedLog.shiftType as string) 
@@ -172,33 +174,33 @@ export default function WageTable({
       <div className="flex flex-col md:flex-row items-center justify-between bg-neutral-900/80 border border-neutral-800 rounded-2xl p-4 shadow-xl backdrop-blur-md gap-4">
         <div className="flex items-center gap-3 w-full md:w-auto">
           <CalendarDays className="w-5 h-5 text-neutral-400" />
-          <div className="flex items-center gap-2 flex-1">
+          <div className="flex flex-col sm:flex-row items-center gap-2 flex-1 w-full">
             <input
               type="date"
               value={startInput}
               onChange={(e) => setStartInput(e.target.value)}
-              className="w-full md:w-auto bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-neutral-200"
+              className="w-full sm:w-auto flex-1 bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-neutral-200"
             />
-            <span className="text-neutral-500 font-medium">to</span>
+            <span className="text-neutral-500 font-medium py-1 sm:py-0">to</span>
             <input
               type="date"
               value={endInput}
               onChange={(e) => setEndInput(e.target.value)}
-              className="w-full md:w-auto bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-neutral-200"
+              className="w-full sm:w-auto flex-1 bg-neutral-950 border border-neutral-800 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-neutral-200"
             />
           </div>
         </div>
 
-        <div className="flex items-center gap-3 w-full md:w-auto">
+        <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto mt-2 md:mt-0">
           <button
             onClick={setThisMonth}
-            className="flex-1 md:flex-none text-neutral-400 hover:text-white hover:bg-neutral-800 px-4 py-2 rounded-xl text-sm font-medium transition-all"
+            className="w-full sm:w-auto flex-1 md:flex-none text-neutral-400 hover:text-white hover:bg-neutral-800 px-4 py-2 rounded-xl text-sm font-medium transition-all text-center"
           >
             This Month
           </button>
           <button
             onClick={applyDateRange}
-            className="flex-1 md:flex-none bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2 rounded-xl text-sm font-semibold transition-all shadow-lg shadow-indigo-500/25"
+            className="w-full sm:w-auto flex-1 md:flex-none bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2 rounded-xl text-sm font-semibold transition-all shadow-lg shadow-indigo-500/25 text-center"
           >
             Apply Range
           </button>
@@ -206,7 +208,7 @@ export default function WageTable({
       </div>
 
       {/* Settings Panel */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 bg-neutral-800/50 p-4 rounded-xl border border-neutral-700">
+      <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 bg-neutral-800/50 p-4 rounded-xl border border-neutral-700">
         <div className="space-y-1">
           <label className="text-xs font-medium text-neutral-400 uppercase tracking-wider">Daily Wage</label>
           <input
@@ -243,7 +245,7 @@ export default function WageTable({
             className="w-full bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all text-neutral-200"
           />
         </div>
-        <div className="space-y-1 flex flex-col justify-end">
+        <div className="space-y-1 flex flex-col justify-end col-span-2 sm:col-span-2 md:col-span-1 lg:col-span-1">
           <button
             onClick={saveSettings}
             disabled={isSavingSettings}
@@ -258,7 +260,7 @@ export default function WageTable({
       {/* Main Table */}
       <div className="overflow-x-auto rounded-xl border border-neutral-800 bg-neutral-900/30">
         <table className="w-full text-sm text-left">
-          <thead className="text-xs text-neutral-400 uppercase bg-neutral-800/80 sticky top-0 backdrop-blur-md z-10">
+          <thead className="text-xs text-neutral-400 uppercase bg-neutral-800/80 sticky top-0 backdrop-blur-md z-10 whitespace-nowrap">
             <tr>
               <th className="px-4 py-4 font-medium rounded-tl-xl text-center">Work?</th>
               <th className="px-4 py-4 font-medium">Date</th>
@@ -329,7 +331,7 @@ export default function WageTable({
                     <option value="NIGHT">Night</option>
                   </select>
                 </td>
-                <td className="px-4 py-3 text-right font-medium text-indigo-300">
+                <td className="px-4 py-3 text-right font-medium text-indigo-300 whitespace-nowrap">
                   {isWorking && metrics.totalExtras > 0 ? (
                     <span className="bg-indigo-500/10 px-2 py-1 rounded text-indigo-400 border border-indigo-500/20">
                       +{metrics.totalExtras.toFixed(2)}
@@ -338,7 +340,7 @@ export default function WageTable({
                     <span className="text-neutral-600">0.00</span>
                   )}
                 </td>
-                <td className="px-4 py-3 text-right font-medium">
+                <td className="px-4 py-3 text-right font-medium whitespace-nowrap">
                   {isWorking ? (
                     <span className="text-emerald-400">{metrics.netBaseWage.toFixed(2)}</span>
                   ) : (
@@ -361,10 +363,10 @@ export default function WageTable({
               </td>
             </tr>
             <tr className="bg-neutral-950 border-t border-neutral-800">
-              <td colSpan={5} className="px-4 py-6 text-right font-bold text-neutral-400 uppercase tracking-wider">
+              <td colSpan={4} className="px-4 py-6 text-right font-bold text-neutral-400 uppercase tracking-wider">
                 Grand Total
               </td>
-              <td colSpan={2} className="px-4 py-6 text-right">
+              <td colSpan={3} className="px-4 py-6 text-right whitespace-nowrap">
                 <span className="text-3xl md:text-4xl font-extrabold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
                   ฿{summary.grandTotal.toFixed(2)}
                 </span>

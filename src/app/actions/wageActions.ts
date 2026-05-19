@@ -53,11 +53,11 @@ export async function getLogsInRange(startDate: Date, endDate: Date) {
 }
 
 export async function saveDailyLog(
-  date: Date,
+  dateStr: string,
   data: { hasFood: boolean; otHours: number; shiftType: string }
 ) {
-  const startOfDay = new Date(date);
-  startOfDay.setHours(0, 0, 0, 0);
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const startOfDay = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
 
   await prisma.dailyWageLog.upsert({
     where: {
@@ -76,9 +76,9 @@ export async function saveDailyLog(
   revalidatePath('/');
 }
 
-export async function deleteDailyLog(date: Date) {
-  const startOfDay = new Date(date);
-  startOfDay.setHours(0, 0, 0, 0);
+export async function deleteDailyLog(dateStr: string) {
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const startOfDay = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
 
   try {
     await prisma.dailyWageLog.delete({

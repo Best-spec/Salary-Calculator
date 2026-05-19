@@ -31,7 +31,7 @@ export default async function Home(props: { searchParams: Promise<{ start?: stri
           </div>
         </header>
 
-        <div className="bg-neutral-900/50 border border-neutral-800 rounded-2xl p-6 backdrop-blur-xl shadow-2xl">
+        <div className="bg-neutral-900/50 border border-neutral-800 rounded-2xl p-3 md:p-6 backdrop-blur-xl shadow-2xl overflow-hidden">
           <WageTable 
             key={`${startDate.toISOString()}-${endDate.toISOString()}`}
             initialSettings={settings} 
