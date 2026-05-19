@@ -1,23 +1,30 @@
 import { getSettings, getLogsInRange } from './actions/wageActions';
 import WageTable from '@/components/WageTable';
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 export default async function Home(props: { searchParams: Promise<{ start?: string; end?: string }> }) {
   const searchParams = await props.searchParams;
   const settings = await getSettings();
   
   const today = new Date();
+  const pad = (n: number) => n.toString().padStart(2, '0');
   
-  let startDate = new Date(today.getFullYear(), today.getMonth(), 1);
-  let endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+  let startStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-01`;
+  let endStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate())}`;
 
   if (searchParams?.start && searchParams?.end) {
-    const [sy, sm, sd] = searchParams.start.split('-').map(Number);
-    const [ey, em, ed] = searchParams.end.split('-').map(Number);
-    startDate = new Date(sy, sm - 1, sd);
-    endDate = new Date(ey, em - 1, ed);
+    startStr = searchParams.start;
+    endStr = searchParams.end;
   }
 
-  const logs = await getLogsInRange(startDate, endDate);
+  const [sy, sm, sd] = startStr.split('-').map(Number);
+  const startDate = new Date(sy, sm - 1, sd);
+  const [ey, em, ed] = endStr.split('-').map(Number);
+  const endDate = new Date(ey, em - 1, ed);
+
+  const logs = await getLogsInRange(startStr, endStr);
 
   return (
     <main className="min-h-screen bg-neutral-950 text-neutral-100 p-4 md:p-8 font-sans selection:bg-indigo-500/30">

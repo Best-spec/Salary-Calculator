@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { updateSettings, saveDailyLog, deleteDailyLog } from '@/app/actions/wageActions';
+import { updateSettings, saveDailyLog, deleteDailyLog, deleteDailyLogById } from '@/app/actions/wageActions';
 import { calculateDailyMetrics, ShiftType } from '@/utils/calculations';
-import { Settings2, Save, Utensils, CalendarDays, CheckCircle2, Circle } from 'lucide-react';
+import { Settings2, Save, Utensils, CalendarDays, CheckCircle2, Circle, XCircle, RefreshCw, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useRouter } from 'next/navigation';
 
@@ -18,7 +18,8 @@ type Settings = {
 type Log = {
   id: string;
   userId: string;
-  date: Date;
+  dateStr: string;
+  date?: Date;
   hasFood: boolean;
   otHours: number | string;
   shiftType: string | ShiftType;
@@ -39,6 +40,19 @@ export default function WageTable({
   const [settings, setSettings] = useState<Settings>(initialSettings);
   const [logs, setLogs] = useState<Log[]>(initialLogs);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [isReloading, setIsReloading] = useState(false);
+  const [processingDates, setProcessingDates] = useState<Set<number>>(new Set());
+
+  type ToastType = { id: number; message: string; type: 'success' | 'error' };
+  const [toasts, setToasts] = useState<ToastType[]>([]);
+
+  const addToast = (message: string, type: 'success' | 'error' = 'success') => {
+    const id = Date.now();
+    setToasts((prev) => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 3000);
+  };
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -56,7 +70,16 @@ export default function WageTable({
 
   const saveSettings = async () => {
     setIsSavingSettings(true);
-    await updateSettings(settings);
+    try {
+      const res = await updateSettings(settings);
+      if (res.success) {
+        addToast('บันทึกการตั้งค่าลงฐานข้อมูลเรียบร้อย', 'success');
+      } else {
+        addToast(res.error || 'เกิดข้อผิดพลาดในการตั้งค่า', 'error');
+      }
+    } catch (e) {
+      addToast('เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์', 'error');
+    }
     setIsSavingSettings(false);
   };
 
@@ -75,49 +98,119 @@ export default function WageTable({
     router.push(`/?start=${start}&end=${end}`);
   };
 
+  const reloadData = () => {
+    setIsReloading(true);
+    router.refresh();
+    setTimeout(() => {
+      setIsReloading(false);
+      addToast('อัปเดตข้อมูลจากฐานข้อมูลล่าสุดแล้ว', 'success');
+    }, 800);
+  };
+
   const toggleWorkDay = async (date: Date, isWorking: boolean) => {
-    // Normalizing time for comparison
-    const targetTime = new Date(date).setHours(0,0,0,0);
+    const timeKey = date.getTime();
+    if (processingDates.has(timeKey)) return;
+    
+    setProcessingDates(prev => {
+      const next = new Set(prev);
+      next.add(timeKey);
+      return next;
+    });
+
+    // Use string for canonical matching
     const dateStr = format(date, 'yyyy-MM-dd');
     
-    if (isWorking) {
-      setLogs((prev) => prev.filter((l) => new Date(l.date).setHours(0,0,0,0) !== targetTime));
-      await deleteDailyLog(dateStr);
-    } else {
-      const newLog: Log = {
-        id: 'mock-id',
-        userId: 'mock',
-        date,
-        hasFood: false,
-        otHours: 0,
-        shiftType: 'NONE',
-      };
-      setLogs((prev) => [...prev, newLog]);
-      await saveDailyLog(dateStr, { hasFood: false, otHours: 0, shiftType: 'NONE' });
+    // Store old log for reverting
+    const oldLog = logs.find((l) => l.dateStr === dateStr);
+
+    try {
+      if (isWorking) {
+        setLogs((prev) => prev.filter((l) => l.dateStr !== dateStr));
+        
+        let res;
+        if (oldLog && oldLog.id && oldLog.id !== 'mock-id') {
+          res = await deleteDailyLogById(oldLog.id);
+        } else {
+          res = await deleteDailyLog(dateStr);
+        }
+        
+        if (res.success) {
+          addToast('ลบวันทำงานในฐานข้อมูลเรียบร้อย', 'success');
+        } else {
+          console.error("Failed to delete log:", res.error);
+          addToast(res.error || 'ลบข้อมูลไม่สำเร็จ', 'error');
+          // Revert state
+          if (oldLog) setLogs(prev => [...prev, oldLog]);
+        }
+      } else {
+        const newLog: Log = {
+          id: 'mock-id',
+          userId: 'mock',
+          dateStr,
+          hasFood: false,
+          otHours: 0,
+          shiftType: 'NONE',
+        };
+        setLogs((prev) => [...prev, newLog]);
+        const res = await saveDailyLog(dateStr, { hasFood: false, otHours: 0, shiftType: 'NONE' });
+        if (res.success) {
+          addToast('เพิ่มวันทำงานในฐานข้อมูลเรียบร้อย', 'success');
+        } else {
+          console.error("Failed to save log:", res.error);
+          addToast(res.error || 'เพิ่มข้อมูลไม่สำเร็จ', 'error');
+          // Revert state
+          setLogs((prev) => prev.filter((l) => l.dateStr !== dateStr));
+        }
+      }
+    } catch (error: any) {
+      console.error("Toggle work day error:", error);
+      addToast(`เครือข่ายขัดข้อง: ${error?.message || String(error)}`, 'error');
+      // Revert state
+      if (isWorking && oldLog) {
+        setLogs(prev => [...prev, oldLog]);
+      } else if (!isWorking) {
+        setLogs((prev) => prev.filter((l) => l.dateStr !== dateStr));
+      }
+    } finally {
+      setProcessingDates(prev => {
+        const next = new Set(prev);
+        next.delete(timeKey);
+        return next;
+      });
     }
   };
 
   const updateLog = (date: Date, field: keyof Log, value: string | number | boolean) => {
-    const targetTime = new Date(date).setHours(0,0,0,0);
+    const dateStr = format(date, 'yyyy-MM-dd');
 
     setLogs((prev) => {
-      return prev.map((l) => (new Date(l.date).setHours(0,0,0,0) === targetTime ? { ...l, [field]: value } : l));
+      return prev.map((l) => (l.dateStr === dateStr ? { ...l, [field]: value } : l));
     });
 
-    const updatedLog = logs.find((l) => new Date(l.date).setHours(0,0,0,0) === targetTime) || {
-      id: '', userId: '', date, hasFood: false, otHours: 0, shiftType: 'NONE'
+    const updatedLog = logs.find((l) => l.dateStr === dateStr) || {
+      id: '', userId: '', dateStr, hasFood: false, otHours: 0, shiftType: 'NONE'
     };
     
-    const key = date.toISOString();
+    const key = dateStr;
     if (saveTimeouts.current[key]) clearTimeout(saveTimeouts.current[key]);
     
-    const dateStr = format(date, 'yyyy-MM-dd');
-    saveTimeouts.current[key] = setTimeout(() => {
-      saveDailyLog(dateStr, { 
-        hasFood: field === 'hasFood' ? (value as boolean) : updatedLog.hasFood, 
-        otHours: parseFloat(String(field === 'otHours' ? value : updatedLog.otHours)) || 0, 
-        shiftType: field === 'shiftType' ? (value as string) : (updatedLog.shiftType as string) 
-      });
+    saveTimeouts.current[key] = setTimeout(async () => {
+      try {
+        const res = await saveDailyLog(dateStr, { 
+          hasFood: field === 'hasFood' ? (value as boolean) : updatedLog.hasFood, 
+          otHours: parseFloat(String(field === 'otHours' ? value : updatedLog.otHours)) || 0, 
+          shiftType: field === 'shiftType' ? (value as string) : (updatedLog.shiftType as string) 
+        });
+        if (res.success) {
+          addToast('อัปเดตข้อมูลลงฐานข้อมูลเรียบร้อย', 'success');
+        } else {
+          console.error("Failed to update log:", res.error);
+          addToast(res.error || 'เกิดข้อผิดพลาดในการอัปเดต', 'error');
+        }
+      } catch (error: any) {
+        console.error("Update log error:", error);
+        addToast(`เครือข่ายขัดข้อง: ${error?.message || String(error)}`, 'error');
+      }
     }, 500);
   };
 
@@ -130,8 +223,8 @@ export default function WageTable({
 
     while (d <= end) {
       const current = new Date(d);
-      const targetTime = current.getTime();
-      const log = logs.find((l) => new Date(l.date).setHours(0,0,0,0) === targetTime);
+      const dateStr = format(current, 'yyyy-MM-dd');
+      const log = logs.find((l) => l.dateStr === dateStr);
       
       let metrics = { totalExtras: 0, netBaseWage: 0, grandTotal: 0, ssoDeduction: 0, shiftAllowance: 0, actualFoodAllowance: 0, totalOtPay: 0 };
       if (log) {
@@ -170,6 +263,26 @@ export default function WageTable({
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
+      {/* Toast Notifications */}
+      <div className="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            className={`animate-in slide-in-from-top-4 fade-in duration-300 pointer-events-auto px-4 py-3 rounded-xl shadow-xl border flex items-center gap-3 backdrop-blur-md ${
+              toast.type === 'success'
+                ? 'bg-emerald-950/90 border-emerald-800 text-emerald-200 shadow-emerald-900/20'
+                : 'bg-red-950/90 border-red-800 text-red-200 shadow-red-900/20'
+            }`}
+          >
+            {toast.type === 'success' ? (
+              <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+            ) : (
+              <XCircle className="w-5 h-5 text-red-500" />
+            )}
+            <p className="text-sm font-medium">{toast.message}</p>
+          </div>
+        ))}
+      </div>
       {/* Date Range Picker */}
       <div className="flex flex-col md:flex-row items-center justify-between bg-neutral-900/80 border border-neutral-800 rounded-2xl p-4 shadow-xl backdrop-blur-md gap-4">
         <div className="flex items-center gap-3 w-full md:w-auto">
@@ -203,6 +316,14 @@ export default function WageTable({
             className="w-full sm:w-auto flex-1 md:flex-none bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2 rounded-xl text-sm font-semibold transition-all shadow-lg shadow-indigo-500/25 text-center"
           >
             Apply Range
+          </button>
+          <button
+            onClick={reloadData}
+            disabled={isReloading}
+            className="w-full sm:w-auto md:flex-none bg-neutral-800 hover:bg-neutral-700 disabled:opacity-50 text-neutral-300 px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center justify-center gap-2"
+          >
+            <RefreshCw className={`w-4 h-4 ${isReloading ? 'animate-spin text-indigo-400' : ''}`} />
+            <span className="hidden sm:inline">Reload</span>
           </button>
         </div>
       </div>
@@ -277,9 +398,12 @@ export default function WageTable({
                 <td className="px-4 py-3 text-center">
                   <button
                     onClick={() => toggleWorkDay(date, isWorking)}
-                    className="p-1 rounded-full transition-all hover:scale-110 focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                    disabled={processingDates.has(date.getTime())}
+                    className="p-1 rounded-full transition-all hover:scale-110 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 disabled:opacity-50 disabled:hover:scale-100"
                   >
-                    {isWorking ? (
+                    {processingDates.has(date.getTime()) ? (
+                      <Loader2 className="w-6 h-6 animate-spin text-neutral-400" />
+                    ) : isWorking ? (
                       <CheckCircle2 className="w-6 h-6 text-emerald-500" />
                     ) : (
                       <Circle className="w-6 h-6 text-neutral-600 hover:text-neutral-400" />
