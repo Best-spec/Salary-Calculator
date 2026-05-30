@@ -11,6 +11,7 @@ export interface DailyMetricsParams {
   shiftType: ShiftType;
   workingHoursPerDay?: number;
   otMultiplier?: number;
+  isDouble?: boolean;
 }
 
 export function calculateDailyMetrics({
@@ -24,7 +25,9 @@ export function calculateDailyMetrics({
   shiftType,
   workingHoursPerDay = 8,
   otMultiplier = 1.5,
+  isDouble = false,
 }: DailyMetricsParams) {
+  const effectiveDailyWage = isDouble ? dailyWage * 2 : dailyWage;
   const hourlyRate = dailyWage / workingHoursPerDay;
   const otRatePerHour = hourlyRate * otMultiplier;
   const totalOtPay = otHours * otRatePerHour;
@@ -40,7 +43,7 @@ export function calculateDailyMetrics({
   // Assuming SSO is deducted per day based on the base daily wage.
   // In reality, it's often monthly, but based on plan: "Daily Wage * (ssoRatePercent / 100)"
   const ssoDeduction = dailyWage * (ssoRatePercent / 100);
-  const netBaseWage = dailyWage - ssoDeduction;
+  const netBaseWage = effectiveDailyWage - ssoDeduction;
 
   const grandTotal = totalExtras + netBaseWage;
 

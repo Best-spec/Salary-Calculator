@@ -27,6 +27,7 @@ model DailyWageLog {
   hasFood        Boolean  @default(true)
   otHours        Float    @default(0.0) // Number of OT hours (e.g., 1.5, 2)
   shiftType      String   @default("NONE") // "NONE", "MORNING", "NIGHT"
+  isDoubleWage   Boolean  @default(false)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

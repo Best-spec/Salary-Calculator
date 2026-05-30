@@ -61,14 +61,20 @@ export async function getLogsInRange(startStr: string, endStr: string) {
   });
 
   return logs.map(l => ({
-    ...l,
+    id: l.id,
+    userId: l.userId,
+    date: l.date,
+    hasFood: l.hasFood,
+    otHours: l.otHours,
+    shiftType: l.shiftType,
+    isDoubleWage: (l as any).isDoubleWage ?? false,
     dateStr: l.date.toISOString().split('T')[0]
   }));
 }
 
 export async function saveDailyLog(
   dateStr: string,
-  data: { hasFood: boolean; otHours: number; shiftType: string }
+  data: { hasFood: boolean; otHours: number; shiftType: string; isDoubleWage?: boolean }
 ) {
   const [year, month, day] = dateStr.split('-').map(Number);
   const startOfDay = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));

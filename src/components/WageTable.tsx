@@ -23,6 +23,7 @@ type Log = {
   hasFood: boolean;
   otHours: number | string;
   shiftType: string | ShiftType;
+  isDoubleWage: boolean;
 };
 
 export default function WageTable({
@@ -150,9 +151,10 @@ export default function WageTable({
           hasFood: false,
           otHours: 0,
           shiftType: 'NONE',
+          isDoubleWage: false,
         };
         setLogs((prev) => [...prev, newLog]);
-        const res = await saveDailyLog(dateStr, { hasFood: false, otHours: 0, shiftType: 'NONE' });
+        const res = await saveDailyLog(dateStr, { hasFood: false, otHours: 0, shiftType: 'NONE', isDoubleWage: false });
         if (res.success) {
           addToast('เพิ่มวันทำงานในฐานข้อมูลเรียบร้อย', 'success');
         } else {
@@ -188,7 +190,7 @@ export default function WageTable({
     });
 
     const updatedLog = logs.find((l) => l.dateStr === dateStr) || {
-      id: '', userId: '', dateStr, hasFood: false, otHours: 0, shiftType: 'NONE'
+      id: '', userId: '', dateStr, hasFood: false, otHours: 0, shiftType: 'NONE', isDoubleWage: false
     };
     
     const key = dateStr;
@@ -199,7 +201,8 @@ export default function WageTable({
         const res = await saveDailyLog(dateStr, { 
           hasFood: field === 'hasFood' ? (value as boolean) : updatedLog.hasFood, 
           otHours: parseFloat(String(field === 'otHours' ? value : updatedLog.otHours)) || 0, 
-          shiftType: field === 'shiftType' ? (value as string) : (updatedLog.shiftType as string) 
+          shiftType: field === 'shiftType' ? (value as string) : (updatedLog.shiftType as string),
+          isDoubleWage: field === 'isDoubleWage' ? (value as boolean) : updatedLog.isDoubleWage
         });
         if (res.success) {
           addToast('อัปเดตข้อมูลลงฐานข้อมูลเรียบร้อย', 'success');
@@ -233,6 +236,7 @@ export default function WageTable({
           hasFood: log.hasFood,
           otHours: typeof log.otHours === 'string' ? parseFloat(log.otHours) || 0 : log.otHours,
           shiftType: log.shiftType as ShiftType,
+          isDouble: !!log.isDoubleWage,
         });
       }
 
@@ -386,6 +390,7 @@ export default function WageTable({
               <th className="px-4 py-4 font-medium rounded-tl-xl text-center">Work?</th>
               <th className="px-4 py-4 font-medium">Date</th>
               <th className="px-4 py-4 font-medium text-center">Food</th>
+              <th className="px-4 py-4 font-medium text-center">2x</th>
               <th className="px-4 py-4 font-medium text-center">OT (Hrs)</th>
               <th className="px-4 py-4 font-medium text-center">Shift</th>
               <th className="px-4 py-4 font-medium text-right text-indigo-300">OT+Shift+Food</th>
@@ -429,6 +434,19 @@ export default function WageTable({
                     } disabled:opacity-50 disabled:cursor-not-allowed`}
                   >
                     <Utensils className="w-4 h-4" />
+                  </button>
+                </td>
+                <td className="px-4 py-3 text-center">
+                  <button
+                    disabled={!isWorking}
+                    onClick={() => isWorking && updateLog(date, 'isDoubleWage', !log?.isDoubleWage)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-black transition-all border ${
+                      log?.isDoubleWage
+                        ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                        : 'text-neutral-500 border-neutral-850 hover:bg-neutral-800'
+                    } disabled:opacity-50 disabled:cursor-not-allowed`}
+                  >
+                    2x
                   </button>
                 </td>
                 <td className="px-4 py-3 text-center">
@@ -476,7 +494,7 @@ export default function WageTable({
           </tbody>
           <tfoot className="bg-neutral-800 sticky bottom-0 z-10 border-t border-neutral-700 shadow-[0_-10px_40px_rgba(0,0,0,0.5)]">
             <tr>
-              <td colSpan={5} className="px-4 py-4 text-right font-bold text-neutral-300 uppercase tracking-wider text-xs">
+              <td colSpan={6} className="px-4 py-4 text-right font-bold text-neutral-300 uppercase tracking-wider text-xs">
                 Total
               </td>
               <td className="px-4 py-4 text-right font-bold text-indigo-400 text-lg">
@@ -487,7 +505,7 @@ export default function WageTable({
               </td>
             </tr>
             <tr className="bg-neutral-950 border-t border-neutral-800">
-              <td colSpan={4} className="px-4 py-6 text-right font-bold text-neutral-400 uppercase tracking-wider">
+              <td colSpan={5} className="px-4 py-6 text-right font-bold text-neutral-400 uppercase tracking-wider">
                 Grand Total
               </td>
               <td colSpan={3} className="px-4 py-6 text-right whitespace-nowrap">
