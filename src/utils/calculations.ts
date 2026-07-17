@@ -29,7 +29,7 @@ export function calculateDailyMetrics({
 }: DailyMetricsParams) {
   const effectiveDailyWage = isDouble ? dailyWage * 2 : dailyWage;
   const hourlyRate = dailyWage / workingHoursPerDay;
-  const otRatePerHour = hourlyRate * otMultiplier;
+  const otRatePerHour = 75; // Adjusted to 75 Baht per hour
   const totalOtPay = otHours * otRatePerHour;
 
   let shiftAllowance = 0;
