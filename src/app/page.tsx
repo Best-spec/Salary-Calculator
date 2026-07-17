@@ -1,4 +1,3 @@
-import { getSettings, getLogsInRange } from './actions/wageActions';
 import WageTable from '@/components/WageTable';
 
 export const dynamic = 'force-dynamic';
@@ -6,7 +5,6 @@ export const revalidate = 0;
 
 export default async function Home(props: { searchParams: Promise<{ start?: string; end?: string }> }) {
   const searchParams = await props.searchParams;
-  const settings = await getSettings();
   
   const today = new Date();
   const pad = (n: number) => n.toString().padStart(2, '0');
@@ -24,7 +22,13 @@ export default async function Home(props: { searchParams: Promise<{ start?: stri
   const [ey, em, ed] = endStr.split('-').map(Number);
   const endDate = new Date(ey, em - 1, ed);
 
-  const logs = await getLogsInRange(startStr, endStr);
+  const defaultSettings = {
+    dailyWage: 410.0,
+    foodAllowance: 40.0,
+    morningShiftExtra: 35.0,
+    nightShiftExtra: 55.0,
+    ssoRatePercent: 5.0,
+  };
 
   return (
     <main className="min-h-screen bg-neutral-950 text-neutral-100 p-4 md:p-8 font-sans selection:bg-indigo-500/30">
@@ -41,8 +45,8 @@ export default async function Home(props: { searchParams: Promise<{ start?: stri
         <div className="bg-neutral-900/50 border border-neutral-800 rounded-2xl p-3 md:p-6 backdrop-blur-xl shadow-2xl overflow-hidden">
           <WageTable 
             key={`${startDate.toISOString()}-${endDate.toISOString()}`}
-            initialSettings={settings} 
-            initialLogs={logs} 
+            initialSettings={defaultSettings} 
+            initialLogs={[]} 
             startDate={startDate} 
             endDate={endDate} 
           />

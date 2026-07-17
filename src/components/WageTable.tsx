@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { updateSettings, saveDailyLog, deleteDailyLog, deleteDailyLogById } from '@/app/actions/wageActions';
 import { calculateDailyMetrics, ShiftType } from '@/utils/calculations';
 import { Settings2, Save, Utensils, CalendarDays, CheckCircle2, Circle, XCircle, RefreshCw, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -38,6 +37,7 @@ export default function WageTable({
   endDate: Date;
 }) {
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
   const [settings, setSettings] = useState<Settings>(initialSettings);
   const [logs, setLogs] = useState<Log[]>(initialLogs);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
@@ -56,11 +56,24 @@ export default function WageTable({
   };
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLogs(initialLogs);
-  }, [initialLogs]);
-
-  const saveTimeouts = useRef<Record<string, NodeJS.Timeout>>({});
+    setMounted(true);
+    const savedSettings = localStorage.getItem('salarycal_settings');
+    if (savedSettings) {
+      try {
+        setSettings(JSON.parse(savedSettings));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    const savedLogs = localStorage.getItem('salarycal_logs');
+    if (savedLogs) {
+      try {
+        setLogs(JSON.parse(savedLogs));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, []);
 
   const [startInput, setStartInput] = useState(format(startDate, 'yyyy-MM-dd'));
   const [endInput, setEndInput] = useState(format(endDate, 'yyyy-MM-dd'));
@@ -69,19 +82,17 @@ export default function WageTable({
     setSettings((prev) => ({ ...prev, [key]: parseFloat(value) || 0 }));
   };
 
-  const saveSettings = async () => {
+  const saveSettings = () => {
     setIsSavingSettings(true);
-    try {
-      const res = await updateSettings(settings);
-      if (res.success) {
-        addToast('บันทึกการตั้งค่าลงฐานข้อมูลเรียบร้อย', 'success');
-      } else {
-        addToast(res.error || 'เกิดข้อผิดพลาดในการตั้งค่า', 'error');
+    setTimeout(() => {
+      try {
+        localStorage.setItem('salarycal_settings', JSON.stringify(settings));
+        addToast('บันทึกการตั้งค่าเรียบร้อย', 'success');
+      } catch (e) {
+        addToast('เกิดข้อผิดพลาดในการบันทึกการตั้งค่า', 'error');
       }
-    } catch (e) {
-      addToast('เกิดข้อผิดพลาดในการเชื่อมต่อเซิร์ฟเวอร์', 'error');
-    }
-    setIsSavingSettings(false);
+      setIsSavingSettings(false);
+    }, 300);
   };
 
   const applyDateRange = () => {
@@ -101,14 +112,17 @@ export default function WageTable({
 
   const reloadData = () => {
     setIsReloading(true);
-    router.refresh();
     setTimeout(() => {
+      const savedSettings = localStorage.getItem('salarycal_settings');
+      if (savedSettings) setSettings(JSON.parse(savedSettings));
+      const savedLogs = localStorage.getItem('salarycal_logs');
+      if (savedLogs) setLogs(JSON.parse(savedLogs));
       setIsReloading(false);
-      addToast('อัปเดตข้อมูลจากฐานข้อมูลล่าสุดแล้ว', 'success');
-    }, 800);
+      addToast('อัปเดตข้อมูลจาก localStorage ล่าสุดแล้ว', 'success');
+    }, 500);
   };
 
-  const toggleWorkDay = async (date: Date, isWorking: boolean) => {
+  const toggleWorkDay = (date: Date, isWorking: boolean) => {
     const timeKey = date.getTime();
     if (processingDates.has(timeKey)) return;
     
@@ -118,103 +132,47 @@ export default function WageTable({
       return next;
     });
 
-    // Use string for canonical matching
     const dateStr = format(date, 'yyyy-MM-dd');
     
-    // Store old log for reverting
-    const oldLog = logs.find((l) => l.dateStr === dateStr);
+    setTimeout(() => {
+      setLogs((prev) => {
+        let newLogs;
+        if (isWorking) {
+          newLogs = prev.filter((l) => l.dateStr !== dateStr);
+          addToast('ลบวันทำงานเรียบร้อย', 'success');
+        } else {
+          const newLog: Log = {
+            id: Math.random().toString(36).substring(2, 9),
+            userId: 'local',
+            dateStr,
+            hasFood: false,
+            otHours: 0,
+            shiftType: 'NONE',
+            isDoubleWage: false,
+          };
+          newLogs = [...prev, newLog];
+          addToast('เพิ่มวันทำงานเรียบร้อย', 'success');
+        }
+        localStorage.setItem('salarycal_logs', JSON.stringify(newLogs));
+        return newLogs;
+      });
 
-    try {
-      if (isWorking) {
-        setLogs((prev) => prev.filter((l) => l.dateStr !== dateStr));
-        
-        let res;
-        if (oldLog && oldLog.id && oldLog.id !== 'mock-id') {
-          res = await deleteDailyLogById(oldLog.id);
-        } else {
-          res = await deleteDailyLog(dateStr);
-        }
-        
-        if (res.success) {
-          addToast('ลบวันทำงานในฐานข้อมูลเรียบร้อย', 'success');
-        } else {
-          console.error("Failed to delete log:", res.error);
-          addToast(res.error || 'ลบข้อมูลไม่สำเร็จ', 'error');
-          // Revert state
-          if (oldLog) setLogs(prev => [...prev, oldLog]);
-        }
-      } else {
-        const newLog: Log = {
-          id: 'mock-id',
-          userId: 'mock',
-          dateStr,
-          hasFood: false,
-          otHours: 0,
-          shiftType: 'NONE',
-          isDoubleWage: false,
-        };
-        setLogs((prev) => [...prev, newLog]);
-        const res = await saveDailyLog(dateStr, { hasFood: false, otHours: 0, shiftType: 'NONE', isDoubleWage: false });
-        if (res.success) {
-          addToast('เพิ่มวันทำงานในฐานข้อมูลเรียบร้อย', 'success');
-        } else {
-          console.error("Failed to save log:", res.error);
-          addToast(res.error || 'เพิ่มข้อมูลไม่สำเร็จ', 'error');
-          // Revert state
-          setLogs((prev) => prev.filter((l) => l.dateStr !== dateStr));
-        }
-      }
-    } catch (error: any) {
-      console.error("Toggle work day error:", error);
-      addToast(`เครือข่ายขัดข้อง: ${error?.message || String(error)}`, 'error');
-      // Revert state
-      if (isWorking && oldLog) {
-        setLogs(prev => [...prev, oldLog]);
-      } else if (!isWorking) {
-        setLogs((prev) => prev.filter((l) => l.dateStr !== dateStr));
-      }
-    } finally {
       setProcessingDates(prev => {
         const next = new Set(prev);
         next.delete(timeKey);
         return next;
       });
-    }
+    }, 150);
   };
 
   const updateLog = (date: Date, field: keyof Log, value: string | number | boolean) => {
     const dateStr = format(date, 'yyyy-MM-dd');
 
     setLogs((prev) => {
-      return prev.map((l) => (l.dateStr === dateStr ? { ...l, [field]: value } : l));
+      const newLogs = prev.map((l) => (l.dateStr === dateStr ? { ...l, [field]: value } : l));
+      localStorage.setItem('salarycal_logs', JSON.stringify(newLogs));
+      return newLogs;
     });
-
-    const updatedLog = logs.find((l) => l.dateStr === dateStr) || {
-      id: '', userId: '', dateStr, hasFood: false, otHours: 0, shiftType: 'NONE', isDoubleWage: false
-    };
-    
-    const key = dateStr;
-    if (saveTimeouts.current[key]) clearTimeout(saveTimeouts.current[key]);
-    
-    saveTimeouts.current[key] = setTimeout(async () => {
-      try {
-        const res = await saveDailyLog(dateStr, { 
-          hasFood: field === 'hasFood' ? (value as boolean) : updatedLog.hasFood, 
-          otHours: parseFloat(String(field === 'otHours' ? value : updatedLog.otHours)) || 0, 
-          shiftType: field === 'shiftType' ? (value as string) : (updatedLog.shiftType as string),
-          isDoubleWage: field === 'isDoubleWage' ? (value as boolean) : updatedLog.isDoubleWage
-        });
-        if (res.success) {
-          addToast('อัปเดตข้อมูลลงฐานข้อมูลเรียบร้อย', 'success');
-        } else {
-          console.error("Failed to update log:", res.error);
-          addToast(res.error || 'เกิดข้อผิดพลาดในการอัปเดต', 'error');
-        }
-      } catch (error: any) {
-        console.error("Update log error:", error);
-        addToast(`เครือข่ายขัดข้อง: ${error?.message || String(error)}`, 'error');
-      }
-    }, 500);
   };
 
   const rows = useMemo(() => {
@@ -264,6 +222,15 @@ export default function WageTable({
       { totalExtras: 0, totalNetBaseWage: 0, grandTotal: 0 }
     );
   }, [rows]);
+
+  if (!mounted) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 space-y-4">
+        <Loader2 className="w-12 h-12 text-indigo-500 animate-spin" />
+        <p className="text-neutral-400 animate-pulse text-sm">กำลังโหลดข้อมูล...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
